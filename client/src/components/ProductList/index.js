@@ -1,70 +1,69 @@
-import React, { useEffect } from 'react';
-import ProductItem from '../ProductItem';
-import { useStoreContext } from '../../utils/GlobalState';
-import { UPDATE_PRODUCTS } from '../../utils/actions';
-import { useQuery } from '@apollo/client';
-import { QUERY_PRODUCTS } from '../../utils/queries';
-import { idbPromise } from '../../utils/helpers';
-import spinner from '../../assets/spinner.gif';
+import React from 'react';
+import { useDispatch } from 'react-redux';
+import { REMOVE_FROM_CART, UPDATE_CART_QUANTITY } from "../../utils/actions";
+import { idbPromise } from "../../utils/helpers";
 
-function ProductList() {
-  const [state, dispatch] = useStoreContext();
+const CartItem = ({ item }) => {
+  const dispatch = useDispatch();
 
-  const { currentCategory } = state;
+  const removeFromCart = item => {
+    dispatch({
+      type: REMOVE_FROM_CART,
+      _id: item._id
+    });
+    idbPromise('cart', 'delete', { ...item });
 
-  const { loading, data } = useQuery(QUERY_PRODUCTS);
+  };
 
-  useEffect(() => {
-    if (data) {
+  const onChange = (e) => {
+    const value = e.target.value;
+    if (value === '0') {
       dispatch({
-        type: UPDATE_PRODUCTS,
-        products: data.products,
+        type: REMOVE_FROM_CART,
+        _id: item._id
       });
-      data.products.forEach((product) => {
-        idbPromise('products', 'put', product);
-      });
-    } else if (!loading) {
-      idbPromise('products', 'get').then((products) => {
-        dispatch({
-          type: UPDATE_PRODUCTS,
-          products: products,
-        });
-      });
-    }
-  }, [data, loading, dispatch]);
+      idbPromise('cart', 'delete', { ...item });
 
-  function filterProducts() {
-    if (!currentCategory) {
-      return state.products;
-    }
+    } else {
+      dispatch({
+        type: UPDATE_CART_QUANTITY,
+        _id: item._id,
+        purchaseQuantity: parseInt(value)
+      });
+      idbPromise('cart', 'put', { ...item, purchaseQuantity: parseInt(value) });
 
-    return state.products.filter(
-      (product) => product.category._id === currentCategory
-    );
+    }
   }
 
   return (
-    <div className="my-2">
-      <h2>Our Products:</h2>
-      {state.products.length ? (
-        <div className="flex-row">
-          {filterProducts().map((product) => (
-            <ProductItem
-              key={product._id}
-              _id={product._id}
-              image={product.image}
-              name={product.name}
-              price={product.price}
-              quantity={product.quantity}
-            />
-          ))}
+    <div className="flex-row">
+      <div>
+        <img
+          src={`/images/${item.image}`}
+          alt=""
+        />
+      </div>
+      <div>
+        <div>{item.name}, ${item.price}</div>
+        <div>
+          <span>Qty:</span>
+          <input
+            type="number"
+            placeholder="1"
+            value={item.purchaseQuantity}
+            onChange={onChange}
+          />
+          <span
+            role="img"
+            aria-label="x"
+            onClick={() => removeFromCart(item)}
+          >
+            ❌
+          </span>
         </div>
-      ) : (
-        <h3>You haven't added any products yet!</h3>
-      )}
-      {loading ? <img src={spinner} alt="loading" /> : null}
+      </div>
     </div>
   );
 }
 
-export default ProductList;
+export default CartItem;
