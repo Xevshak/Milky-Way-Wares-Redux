@@ -1,69 +1,71 @@
-import React from 'react';
-import { useDispatch } from 'react-redux';
-import { REMOVE_FROM_CART, UPDATE_CART_QUANTITY } from "../../utils/actions";
-import { idbPromise } from "../../utils/helpers";
+import React, { useEffect } from 'react';
+import ProductItem from '../ProductItem';
+import { useDispatch, useSelector } from 'react-redux';
+import { UPDATE_PRODUCTS } from '../../utils/actions';
+import { useQuery } from '@apollo/client';
+import { QUERY_PRODUCTS } from '../../utils/queries';
+import { idbPromise } from '../../utils/helpers';
+import spinner from '../../assets/spinner.gif';
 
-const CartItem = ({ item }) => {
+function ProductList() {
   const dispatch = useDispatch();
+  const state = useSelector((state) => state);
 
-  const removeFromCart = item => {
-    dispatch({
-      type: REMOVE_FROM_CART,
-      _id: item._id
-    });
-    idbPromise('cart', 'delete', { ...item });
+  const { currentCategory } = state;
 
-  };
+  const { loading, data } = useQuery(QUERY_PRODUCTS);
 
-  const onChange = (e) => {
-    const value = e.target.value;
-    if (value === '0') {
+  useEffect(() => {
+    if (data) {
       dispatch({
-        type: REMOVE_FROM_CART,
-        _id: item._id
+        type: UPDATE_PRODUCTS,
+        products: data.products,
       });
-      idbPromise('cart', 'delete', { ...item });
-
-    } else {
-      dispatch({
-        type: UPDATE_CART_QUANTITY,
-        _id: item._id,
-        purchaseQuantity: parseInt(value)
+      data.products.forEach((product) => {
+        idbPromise('products', 'put', product);
       });
-      idbPromise('cart', 'put', { ...item, purchaseQuantity: parseInt(value) });
-
+    } else if (!loading) {
+      idbPromise('products', 'get').then((products) => {
+        dispatch({
+          type: UPDATE_PRODUCTS,
+          products: products,
+        });
+      });
     }
+  }, [data, loading, dispatch]);
+
+  function filterProducts() {
+    if (!currentCategory) {
+      return state.products;
+    }
+
+    return state.products.filter(
+      (product) => product.category._id === currentCategory
+    );
   }
 
   return (
-    <div className="flex-row">
-      <div>
-        <img
-          src={`/images/${item.image}`}
-          alt=""
-        />
-      </div>
-      <div>
-        <div>{item.name}, ${item.price}</div>
-        <div>
-          <span>Qty:</span>
-          <input
-            type="number"
-            placeholder="1"
-            value={item.purchaseQuantity}
-            onChange={onChange}
-          />
-          <span
-            role="img"
-            aria-label="x"
-            onClick={() => removeFromCart(item)}
-          >
-            ❌
-          </span>
+    <div className="my-2">
+      <h2>Galactic Wares:</h2>
+      {state.products.length ? (
+        <div className="flex-row">
+          {filterProducts().map((product) => (
+            <ProductItem
+              key={product._id}
+              _id={product._id}
+              image={product.image}
+              name={product.name}
+              price={product.price}
+              quantity={product.quantity}
+            />
+          ))}
         </div>
-      </div>
+      ) : (
+        <h3>Your nebula is empty! Your products need to be added.</h3>
+      )}
+      {loading ? <img src={spinner} alt="loading" /> : null}
     </div>
   );
 }
 
-export default CartItem;
+export default ProductList;
